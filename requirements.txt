@@ -1,3 +1,0 @@
-streamlit
-audio-recorder-streamlit
-google-generativeai
