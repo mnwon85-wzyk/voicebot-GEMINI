@@ -20,7 +20,7 @@ api_key = st.sidebar.text_input(
 selected_model = st.sidebar.selectbox(
     "Gemini 모델 선택",
     options=[
-        "gemini-2.5-flash",
+        "gemini-3.6-flash",
         "gemini-2.5-pro",
         "gemini-2.0-flash"
     ],
