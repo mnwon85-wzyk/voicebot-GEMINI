@@ -73,13 +73,24 @@ if text_input_from_speech:
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
 
-# ---------------------------------------------------------
-# 결과 출력 영역
-# ---------------------------------------------------------
+# 인식된 질문 표시 칸
 if st.session_state.question:
-    st.markdown("### 🗣️ 인식된 질문")
-    st.info(st.session_state.question)
+    st.info(f"🗣️ **들린 질문:** {st.session_state.question}")
 
-if st.session_state.response:
-    st.markdown("### ✨ 수정구슬의 답변")
-    st.success(st.session_state.response)
+st.markdown("---")
+
+# ---------------------------------------------------------
+# 2. 대답 칸 (Gemini 답변 전용 박스)
+# ---------------------------------------------------------
+st.markdown("### 2. 수정구슬의 대답")
+
+# 대답이 들어갈 고정 영역 생성
+answer_container = st.container(border=True)
+
+with answer_container:
+    if st.session_state.response:
+        st.markdown(st.session_state.response)
+    elif st.session_state.question and not st.session_state.response:
+        st.write("🔮 *답변을 생성하고 있습니다...*")
+    else:
+        st.write("💬 *마이크로 질문하시면 이곳에 수정구슬의 답이 나타납니다.*")
