@@ -71,6 +71,13 @@ if (
     )
 
 if (
+    "last_error" not in st.session_state
+):  # 세션에 'last_error'(마지막 오류 메시지)가 없으면 초기화합니다.
+    st.session_state.last_error = (
+        ""  # rerun 이후에도 사라지지 않고 화면에 남아있을 오류 메시지를 빈 문자열로 초기화합니다.
+    )
+
+if (
     "user_api_key" not in st.session_state
 ):  # 세션에 'user_api_key'(화면에서 직접 입력한 키)가 없으면 초기화합니다.
     st.session_state.user_api_key = (
@@ -148,6 +155,9 @@ def askGeminiWithAudio(
     )
     st.session_state.last_response_model = (
         model_name  # 방금 답변에 사용된 모델명을 기록해 화면에 표시할 수 있게 합니다.
+    )
+    st.session_state.last_error = (
+        ""  # 정상적으로 답변을 받았으므로 이전 오류 기록을 지웁니다.
     )
 
     return answer_text  # 생성된 답변 텍스트를 반환합니다.
@@ -294,6 +304,9 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
             st.session_state.last_response_model = (
                 ""  # 마지막 답변 모델 기록도 함께 초기화합니다.
             )
+            st.session_state.last_error = (
+                ""  # 오류 기록도 함께 초기화합니다.
+            )
             st.rerun()  # Streamlit 앱을 새로고침하여 초기화된 상태를 적용합니다.
 
     # 화면에서 입력한 키가 있으면 그 값을 우선 사용하고, 없으면 Secrets/파일 값을 사용합니다.
@@ -325,24 +338,27 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
         st.session_state.last_audio = (
             audio_bytes  # 현재 입력받은 오디오 데이터를 세션에 저장합니다.
         )
+        st.session_state.last_error = (
+            ""  # 새 녹음을 시작하므로 이전 오류 기록을 지웁니다.
+        )
 
         if not gemini_api_key:  # 화면 입력/Secrets/파일 어디에도 키가 없는 경우 에러를 표시합니다.
-            st.error(
+            st.session_state.last_error = (
                 "⚠️ API 키가 없습니다. 왼쪽 사이드바의 'API 키 설정'에 Gemini API 키를 입력해 주세요."
-            )
+            )  # 오류를 세션에 저장해 rerun 이후에도 사라지지 않게 합니다.
         else:  # API 키가 정상적으로 존재하는 경우
             with st.spinner(
                 "Gemini가 음성을 분석하고 답변을 생성하는 중입니다..."
             ):  # 로딩 애니메이션을 띄웁니다.
-                try:  # Gemini 호출 중 발생할 수 있는 오류(예: 잘못된 키)를 대비합니다.
+                try:  # Gemini 호출 중 발생할 수 있는 오류(예: 잘못된 키, 모델명, 네트워크)를 대비합니다.
                     askGeminiWithAudio(  # 음성 분석 및 답변 생성 함수를 실행합니다.
                         audio_bytes, selected_model, gemini_api_key
                     )
                 except Exception as e:  # 키가 유효하지 않거나 호출이 실패한 경우
-                    st.error(
-                        f"⚠️ 요청 처리 중 오류가 발생했습니다. API 키가 올바른지 확인해 주세요. ({e})"
-                    )  # 사용자에게 원인을 알기 쉽게 안내합니다.
-            st.rerun()  # 화면을 새로고침하여 결과를 즉시 업데이트합니다.
+                    st.session_state.last_error = (  # 이전에는 st.error로만 띄우고 바로 st.rerun()이 지워버려 화면에 아무것도 안 보였던 부분입니다.
+                        f"⚠️ 요청 처리 중 오류가 발생했습니다. API 키/모델명을 확인해 주세요. (원인: {e})"
+                    )
+            st.rerun()  # 화면을 새로고침하여 결과를 즉시 업데이트합니다(오류는 last_error에 저장되어 사라지지 않습니다).
 
     # 내 질문 다시 듣기 (보조 요소 - 접이식으로 축소)
     if st.session_state.last_audio and os.path.exists(
@@ -358,7 +374,9 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
     st.markdown("---")  # 구분선을 그립니다.
     st.subheader("2. Gemini 답변")  # 정식으로 번호가 매겨진 답변 섹션 제목입니다.
 
-    if st.session_state.last_response_text:  # 생성된 답변 텍스트가 있는 경우
+    if st.session_state.get("last_error"):  # 직전 처리에서 오류가 발생한 경우 (이전에는 rerun이 이 메시지를 바로 지워버렸습니다)
+        st.error(st.session_state.last_error)  # 오류 내용을 화면에 계속 표시합니다.
+    elif st.session_state.last_response_text:  # 오류 없이 생성된 답변 텍스트가 있는 경우
         if st.session_state.get("last_response_model"):  # 답변에 쓰인 모델 정보가 있는 경우
             st.caption(
                 f"🔮 사용 모델: `{st.session_state.last_response_model}`"
