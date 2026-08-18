@@ -1,7 +1,4 @@
 import base64  # 바이너리 데이터(음원 파일)를 텍스트 데이터 형태(Base64)로 변환하는 모듈을 불러옵니다.
-from datetime import (
-    datetime,
-)  # 현재 시간을 구하기 위해 datetime 모듈에서 datetime 클래스를 불러옵니다.
 import os  # 파일 존재 여부 확인, 파일 삭제 등 운영체제 기능 이용을 위한 os 모듈을 불러옵니다.
 import streamlit as st  # 웹 애플리케이션 UI를 제작하기 위한 Streamlit 라이브러리를 st라는 이름으로 불러옵니다.
 from audio_recorder_streamlit import (
@@ -52,20 +49,6 @@ def get_gemini_api_key():  # API 키를 백그라운드에서 안전하게 찾�
 
 
 # 세션 상태(Session State) 초기화
-if (
-    "messages" not in st.session_state
-):  # 세션에 'messages'(프롬프트 기록) 항목이 없으면 초기화합니다.
-    st.session_state["messages"] = (
-        []
-    )  # 대화 프롬프트 기록을 저장할 빈 리스트를 생성합니다.
-
-if (
-    "chat" not in st.session_state
-):  # 세션에 'chat'(화면 표시용 대화 기록) 항목이 없으면 초기화합니다.
-    st.session_state["chat"] = (
-        []
-    )  # 화면에 보여줄 대화 기록을 저장할 빈 리스트를 생성합니다.
-
 if (
     "last_audio" not in st.session_state
 ):  # 세션에 'last_audio'(마지막 녹음 데이터)가 없으면 초기화합니다.
@@ -149,10 +132,7 @@ def askGeminiWithAudio(
     response = model.generate_content(
         [audio_file, prompt]
     )  # 업로드한 음성 파일과 프롬프트를 함께 Gemini 모델에 전달하여 답변을 생성합니다.
-    answer_text = response.text  # 생성된 답변 텍스트만 추출합니다(TTS 음성 재생에는 이 순수 텍스트를 사용).
-    display_answer_text = (  # 화면 채팅창에는 어떤 모델이 답했는지 함께 표시하기 위한 문자열입니다.
-        f"🔮 **[{model_name}]**\n\n{answer_text}"
-    )
+    answer_text = response.text  # 생성된 답변 텍스트만 추출합니다.
 
     # 업로드 파일 삭제 (구글 서버 임시 파일 정리)
     try:  # 정리 작업을 진행합니다.
@@ -162,25 +142,7 @@ def askGeminiWithAudio(
     except Exception:  # 삭제 실패 시 에러가 나도 무시합니다.
         pass  # 넘어가기
 
-    # 3. session_state 기록 저장
-    now_str = datetime.now().strftime(
-        "%H:%M"
-    )  # 현재 시각을 '시:분' 형태의 문자열로 변환합니다.
-
-    st.session_state["messages"].append(  # 프롬프트 세션 목록에 사용자 요청 기록을 추가합니다.
-        {"role": "user", "content": "[음성 질문 입력됨]"}
-    )
-    st.session_state["messages"].append(  # 프롬프트 세션 목록에 AI 답변 기록을 추가합니다.
-        {"role": "assistant", "content": answer_text}
-    )
-
-    st.session_state["chat"].append(  # 화면 출력용 세션 목록에 (작성자, 시간, 내용) 튜플 형태 사용자 데이터를 추가합니다.
-        ("user", now_str, "🎙️ [음성 질문]")
-    )
-    st.session_state["chat"].append(  # 화면 출력용 세션 목록에 (작성자, 시간, 내용) 튜플 형태 AI 답변 데이터를 추가합니다.
-        ("assistant", now_str, display_answer_text)  # 답변 텍스트 앞에 사용된 모델명을 붙여서 저장합니다.
-    )
-
+    # 3. session_state 기록 저장 (2번 답변 영역에서 바로 보여줄 최신 답변만 저장)
     st.session_state.last_response_text = (
         answer_text  # 최신 답변 텍스트를 자동 음성 재생용 변수에 등록합니다.
     )
@@ -321,14 +283,8 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
         st.markdown("---")  # 사이드바 내 구분선을 그립니다.
 
         if st.button(
-            "🔄 대화 내용 초기화", use_container_width=True
-        ):  # 대화 초기화 버튼을 가로 전체 너비로 만듭니다.
-            st.session_state["messages"] = (
-                []
-            )  # 프롬프트 저장 세션을 빈 리스트로 초기화합니다.
-            st.session_state["chat"] = (
-                []
-            )  # 화면 대화 기록 세션을 빈 리스트로 초기화합니다.
+            "🔄 답변 초기화", use_container_width=True
+        ):  # 답변 초기화 버튼을 가로 전체 너비로 만듭니다.
             st.session_state.last_audio = (
                 None  # 녹음 오디오 기록을 초기화합니다.
             )
@@ -388,53 +344,39 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
                     )  # 사용자에게 원인을 알기 쉽게 안내합니다.
             st.rerun()  # 화면을 새로고침하여 결과를 즉시 업데이트합니다.
 
-    # 질문 다시 듣기 및 답변 음성 재생 영역
-    if st.session_state.last_audio:  # 녹음된 오디오 기록이 존재하는 경우 실행합니다.
-        col1, col2 = st.columns(
-            2
-        )  # 화면을 가로로 2개의 컬럼(열)으로 나눕니다.
+    # 내 질문 다시 듣기 (보조 요소 - 접이식으로 축소)
+    if st.session_state.last_audio and os.path.exists(
+        "input.mp3"
+    ):  # 녹음된 오디오와 파일이 모두 존재하는 경우
+        with st.expander("🔻 내 질문 다시 듣기"):  # 클릭해야 펼쳐지는 보조 영역으로 뺍니다.
+            with open("input.mp3", "rb") as f:  # 질문 파일을 읽어옵니다.
+                st.audio(
+                    f.read(), format="audio/mp3"
+                )  # 화면에 질문 음성 오디오 플레이어를 생성합니다.
 
-        if os.path.exists("input.mp3"):  # 질문 파일이 존재하는 경우
-            with col1:  # 첫 번째 컬럼 영역
-                st.write("🔻 **내 질문 다시 듣기**")  # 볼드체 텍스트 출력
-                with open("input.mp3", "rb") as f:  # 질문 파일을 읽어옵니다.
-                    st.audio(
-                        f.read(), format="audio/mp3"
-                    )  # 화면에 질문 음성 오디오 플레이어를 생성합니다.
+    # --- 2. Gemini 답변 영역 (사용자 음성 질문에 대한 실제 답변을 보여주는 핵심 섹션) ---
+    st.markdown("---")  # 구분선을 그립니다.
+    st.subheader("2. Gemini 답변")  # 정식으로 번호가 매겨진 답변 섹션 제목입니다.
 
-        if st.session_state.last_response_text:  # 생성된 답변 텍스트가 있는 경우
-            with col2:  # 두 번째 컬럼 영역
-                st.write("🔊 **Gemini의 답변**")  # 볼드체 텍스트 출력
-                if st.session_state.get("last_response_model"):  # 답변에 쓰인 모델 정보가 있는 경우
-                    st.caption(
-                        f"사용 모델: `{st.session_state.last_response_model}`"
-                    )  # 어떤 모델이 답했는지 작은 글씨로 표시합니다.
-                st.markdown(
-                    st.session_state.last_response_text
-                )  # 실제 Gemini 답변 텍스트를 화면에 그대로 표시합니다(이 부분이 빠져 있어서 답이 안 보였습니다).
-                if st.button("▶️ 답변 다시 읽어주기"):  # 수동 수신용 다시 읽기 버튼을 생성합니다.
-                    speak_text(
-                        st.session_state.last_response_text
-                    )  # 버튼 클릭 시 브라우저가 답변을 다시 읽어줍니다.
-
+    if st.session_state.last_response_text:  # 생성된 답변 텍스트가 있는 경우
+        if st.session_state.get("last_response_model"):  # 답변에 쓰인 모델 정보가 있는 경우
+            st.caption(
+                f"🔮 사용 모델: `{st.session_state.last_response_model}`"
+            )  # 어떤 모델이 답했는지 작은 글씨로 표시합니다.
+        st.markdown(
+            f"### 🔊 {st.session_state.last_response_text}"
+        )  # 사용자 음성 질문에 대한 Gemini의 실제 답변 텍스트를 화면 중앙 흐름에 크게 표시합니다.
+        if st.button("▶️ 답변 다시 읽어주기"):  # 수동 수신용 다시 읽기 버튼을 생성합니다.
             speak_text(
                 st.session_state.last_response_text
-            )  # 답변 생성 완료 직후 자동으로 브라우저가 음성을 읽어주도록 실행합니다.
-
-    st.markdown("---")  # 메인 구분선을 그립니다.
-
-    # 대화 기록 출력 영역
-    st.subheader("2. 답변 기록")  # 소제목 2를 출력합니다.
-
-    for sender, time_str, message in st.session_state[
-        "chat"
-    ]:  # 대화 기록 세션의 튜플 데이터를 하나씩 다룹니다.
-        with st.chat_message(
-            sender
-        ):  # 대화 주체('user' 또는 'assistant')에 맞는 말풍선 버블을 생성합니다.
-            st.write(
-                f"**[{time_str}]** {message}"
-            )  # 시간 정보와 함께 대화 메시지 내용을 말풍선 안에 출력합니다.
+            )  # 버튼 클릭 시 브라우저가 답변을 다시 읽어줍니다.
+        speak_text(
+            st.session_state.last_response_text
+        )  # 답변 생성 완료 직후 자동으로 브라우저가 음성을 읽어주도록 실행합니다.
+    else:  # 아직 질문을 녹음하지 않아 답변이 없는 경우
+        st.info(
+            "아직 답변이 없습니다. 위에서 마이크 버튼을 눌러 질문을 녹음하면 여기에 Gemini의 답변이 표시됩니다."
+        )  # 답변이 비어있을 때 안내 문구를 보여줍니다.
 
 
 if __name__ == "__main__":  # 파이썬 파일이 직접 실행될 때만 아래 영역을 수행합니다.
