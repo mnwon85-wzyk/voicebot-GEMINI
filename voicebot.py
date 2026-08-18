@@ -424,7 +424,7 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
     st.markdown("---")  # 메인 구분선을 그립니다.
 
     # 대화 기록 출력 영역
-    st.subheader("2. 대화 기록")  # 소제목 2를 출력합니다.
+    st.subheader("2. 답변 기록")  # 소제목 2를 출력합니다.
 
     for sender, time_str, message in st.session_state[
         "chat"
