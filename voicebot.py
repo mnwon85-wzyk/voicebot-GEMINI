@@ -81,6 +81,13 @@ if (
     )
 
 if (
+    "last_response_model" not in st.session_state
+):  # 세션에 'last_response_model'(마지막 답변에 쓰인 모델명)이 없으면 초기화합니다.
+    st.session_state.last_response_model = (
+        ""  # 마지막 답변에 사용된 모델명을 빈 문자열로 초기화합니다.
+    )
+
+if (
     "user_api_key" not in st.session_state
 ):  # 세션에 'user_api_key'(화면에서 직접 입력한 키)가 없으면 초기화합니다.
     st.session_state.user_api_key = (
@@ -142,7 +149,10 @@ def askGeminiWithAudio(
     response = model.generate_content(
         [audio_file, prompt]
     )  # 업로드한 음성 파일과 프롬프트를 함께 Gemini 모델에 전달하여 답변을 생성합니다.
-    answer_text = response.text  # 생성된 답변 텍스트만 추출합니다.
+    answer_text = response.text  # 생성된 답변 텍스트만 추출합니다(TTS 음성 재생에는 이 순수 텍스트를 사용).
+    display_answer_text = (  # 화면 채팅창에는 어떤 모델이 답했는지 함께 표시하기 위한 문자열입니다.
+        f"🔮 **[{model_name}]**\n\n{answer_text}"
+    )
 
     # 업로드 파일 삭제 (구글 서버 임시 파일 정리)
     try:  # 정리 작업을 진행합니다.
@@ -168,11 +178,14 @@ def askGeminiWithAudio(
         ("user", now_str, "🎙️ [음성 질문]")
     )
     st.session_state["chat"].append(  # 화면 출력용 세션 목록에 (작성자, 시간, 내용) 튜플 형태 AI 답변 데이터를 추가합니다.
-        ("assistant", now_str, answer_text)
+        ("assistant", now_str, display_answer_text)  # 답변 텍스트 앞에 사용된 모델명을 붙여서 저장합니다.
     )
 
     st.session_state.last_response_text = (
         answer_text  # 최신 답변 텍스트를 자동 음성 재생용 변수에 등록합니다.
+    )
+    st.session_state.last_response_model = (
+        model_name  # 방금 답변에 사용된 모델명을 기록해 화면에 표시할 수 있게 합니다.
     )
 
     return answer_text  # 생성된 답변 텍스트를 반환합니다.
@@ -322,6 +335,9 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
             st.session_state.last_response_text = (
                 ""  # 답변 텍스트 기록을 초기화합니다.
             )
+            st.session_state.last_response_model = (
+                ""  # 마지막 답변 모델 기록도 함께 초기화합니다.
+            )
             st.rerun()  # Streamlit 앱을 새로고침하여 초기화된 상태를 적용합니다.
 
     # 화면에서 입력한 키가 있으면 그 값을 우선 사용하고, 없으면 Secrets/파일 값을 사용합니다.
@@ -334,6 +350,9 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
     st.write(
         "마이크 버튼을 클릭하여 질문을 녹음하세요."
     )  # 사용법 안내 문구를 출력합니다.
+    st.caption(
+        f"🔮 답변에 사용될 모델: `{selected_model}` (왼쪽 사이드바에서 변경 가능)"
+    )  # 사이드바에서 고른 모델이 실제로 답변에 쓰인다는 것을 미리 알려줍니다.
 
     audio_bytes = audio_recorder(  # 화면에 음성 녹음 마이크 버튼 컴포넌트를 생성하고 녹음 결과를 받습니다.
         text="클릭하여 녹음하기",  # 버튼 옆에 표시될 문구입니다.
@@ -385,7 +404,14 @@ def main():  # 웹 앱의 화면 및 로직을 구성하는 메인 함수를 정
 
         if st.session_state.last_response_text:  # 생성된 답변 텍스트가 있는 경우
             with col2:  # 두 번째 컬럼 영역
-                st.write("🔊 **AI 답변 다시 듣기**")  # 볼드체 텍스트 출력
+                st.write("🔊 **Gemini의 답변**")  # 볼드체 텍스트 출력
+                if st.session_state.get("last_response_model"):  # 답변에 쓰인 모델 정보가 있는 경우
+                    st.caption(
+                        f"사용 모델: `{st.session_state.last_response_model}`"
+                    )  # 어떤 모델이 답했는지 작은 글씨로 표시합니다.
+                st.markdown(
+                    st.session_state.last_response_text
+                )  # 실제 Gemini 답변 텍스트를 화면에 그대로 표시합니다(이 부분이 빠져 있어서 답이 안 보였습니다).
                 if st.button("▶️ 답변 다시 읽어주기"):  # 수동 수신용 다시 읽기 버튼을 생성합니다.
                     speak_text(
                         st.session_state.last_response_text
